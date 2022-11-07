@@ -1,0 +1,6 @@
+./build
+
+*.mv
+.build
+build
+wallet.log.*
