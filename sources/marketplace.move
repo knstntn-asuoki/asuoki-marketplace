@@ -1,5 +1,5 @@
 module asuoki::marketplace {
-        use sui::object::{Self, UID};
+        use sui::object::{Self, ID, UID};
         use sui::transfer;
         use sui::tx_context::{Self, TxContext};
         use sui::coin::{Self, Coin};
@@ -10,6 +10,7 @@ module asuoki::marketplace {
         }
 
         struct List<T: key + store, phantom C> has key, store {
+                id: UID,
                 seller: address,
                 item: T,
                 price: u64
@@ -25,27 +26,31 @@ module asuoki::marketplace {
                 transfer::share_object(marketplace);
         }
 
-        public entry fun list_item<T: key + store, C>(mp: &mut Marketplace, item: T, item_address: address, price: u64, ctx: &mut TxContext) {
+        public entry fun list_item<T: key + store, C>(mp: &mut Marketplace, item: T, price: u64, ctx: &mut TxContext) {
+                let item_id = object::id(&item);
                 let listing = List<T, C> {
+                        id: object::new(ctx),
                         seller: tx_context::sender(ctx),
                         item: item,
                         price: price
                 };
-                dynamic_field::add(&mut mp.id, item_address, listing);
+                dynamic_field::add(&mut mp.id, item_id, listing);
         }
 
-        public entry fun delist_item<T: key + store, C>(mp: &mut Marketplace, item_address: address, ctx: &mut TxContext) {
-                let List<T, C> { seller, item, price: _ } = dynamic_field::remove(&mut mp.id, item_address);
+        public entry fun delist_item<T: key + store, C>(mp: &mut Marketplace, item_id: ID, ctx: &mut TxContext) {
+                let List<T, C> { id, seller, item, price: _ } = dynamic_field::remove(&mut mp.id, item_id);
                 assert!(tx_context::sender(ctx) == seller, 126);
+                object::delete(id);
                 transfer::transfer(item, tx_context::sender(ctx));
         }
 
-        public entry fun buy_item<T: key + store, C>(mp: &mut Marketplace, item_address: address, paid: Coin<C>, ctx: &mut TxContext) { 
-                let List<T, C> { seller, item, price } = dynamic_field::remove(&mut mp.id, item_address);
+        public entry fun buy_item<T: key + store, C>(mp: &mut Marketplace, item_id: ID, paid: Coin<C>, ctx: &mut TxContext) { 
+                let List<T, C> { id, seller, item, price } = dynamic_field::remove(&mut mp.id, item_id);
                 assert!(price == coin::value(&paid), 127);
+                object::delete(id);
                 transfer::transfer(paid, seller);
                 transfer::transfer(item, tx_context::sender(ctx));
-        }
+        } 
 }
 
 #[test_only]
@@ -110,7 +115,7 @@ module asuoki::marketplaceTests {
                 let market = test_scenario::take_shared<Marketplace>(scenario);
                 let mkp = &mut market;
                 let nft = test_scenario::take_from_sender<NFT>(scenario);
-                marketplace::list_item<NFT, SUI>(mkp, nft, ITEM, 1000, test_scenario::ctx(scenario));
+                marketplace::list_item<NFT, SUI>(mkp, nft, 1000, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
                 test_scenario::end(scenario_val);
         }
@@ -126,12 +131,13 @@ module asuoki::marketplaceTests {
                 let market = test_scenario::take_shared<Marketplace>(scenario);
                 let mkp = &mut market;
                 let nft = test_scenario::take_from_sender<NFT>(scenario);
-                marketplace::list_item<NFT, SUI>(mkp, nft, ITEM, 1000, test_scenario::ctx(scenario));
+                let item_id = object::id(&nft);
+                marketplace::list_item<NFT, SUI>(mkp, nft, 1000, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
                 test_scenario::next_tx(scenario, SELLER);
                 let market = test_scenario::take_shared<Marketplace>(scenario);
                 let mkp = &mut market;
-                marketplace::delist_item<NFT, SUI>(mkp, ITEM, test_scenario::ctx(scenario));
+                marketplace::delist_item<NFT, SUI>(mkp, item_id, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
                 test_scenario::end(scenario_val);
         }
@@ -149,7 +155,8 @@ module asuoki::marketplaceTests {
                 let market = test_scenario::take_shared<Marketplace>(scenario);
                 let mkp = &mut market;
                 let nft = test_scenario::take_from_sender<NFT>(scenario);
-                marketplace::list_item<NFT, SUI>(mkp, nft, ITEM, 1000, test_scenario::ctx(scenario));
+                let item_id = object::id(&nft);
+                marketplace::list_item<NFT, SUI>(mkp, nft, 1000, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
 
                 test_scenario::next_tx(scenario, BUYER);
@@ -160,7 +167,7 @@ module asuoki::marketplaceTests {
                 
                 let payment = coin::take(coin::balance_mut(&mut coin), 1000, test_scenario::ctx(scenario));
                 
-                marketplace::buy_item<NFT, SUI>(mkp, ITEM, payment, test_scenario::ctx(scenario));
+                marketplace::buy_item<NFT, SUI>(mkp, item_id, payment, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
                 test_scenario::return_to_sender(scenario, coin);
 
@@ -186,7 +193,8 @@ module asuoki::marketplaceTests {
                 let market = test_scenario::take_shared<Marketplace>(scenario);
                 let mkp = &mut market;
                 let nft = test_scenario::take_from_sender<NFT>(scenario);
-                marketplace::list_item<NFT, SUI>(mkp, nft, ITEM, 1000, test_scenario::ctx(scenario));
+                let item_id = object::id(&nft);
+                marketplace::list_item<NFT, SUI>(mkp, nft, 1000, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
 
                 test_scenario::next_tx(scenario, BUYER);
@@ -197,7 +205,7 @@ module asuoki::marketplaceTests {
                 
                 let payment = coin::take(coin::balance_mut(&mut coin), 100, test_scenario::ctx(scenario));
                 
-                marketplace::buy_item<NFT, SUI>(mkp, ITEM, payment, test_scenario::ctx(scenario));
+                marketplace::buy_item<NFT, SUI>(mkp, item_id, payment, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
                 test_scenario::return_to_sender(scenario, coin);
 
@@ -221,12 +229,13 @@ module asuoki::marketplaceTests {
                 let market = test_scenario::take_shared<Marketplace>(scenario);
                 let mkp = &mut market;
                 let nft = test_scenario::take_from_sender<NFT>(scenario);
-                marketplace::list_item<NFT, SUI>(mkp, nft, ITEM, 1000, test_scenario::ctx(scenario));
+                let item_id = object::id(&nft);
+                marketplace::list_item<NFT, SUI>(mkp, nft, 1000, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
                 test_scenario::next_tx(scenario, BUYER);
                 let market = test_scenario::take_shared<Marketplace>(scenario);
                 let mkp = &mut market;
-                marketplace::delist_item<NFT, SUI>(mkp, ITEM, test_scenario::ctx(scenario));
+                marketplace::delist_item<NFT, SUI>(mkp, item_id, test_scenario::ctx(scenario));
                 test_scenario::return_shared(market);
                 test_scenario::end(scenario_val);
         }
