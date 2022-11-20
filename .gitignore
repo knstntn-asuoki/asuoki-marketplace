@@ -1,6 +1,7 @@
 ./build
-
+sdk
 *.mv
 .build
 build
 wallet.log.*
+help.md

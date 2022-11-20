@@ -99,6 +99,26 @@ module asuoki::marketplace {
                 object::delete(idOffer);
                 object::delete(id);
         } 
+
+        public fun get_seller<T: store + key>(old_listing: &List<T>): &address {
+                &old_listing.seller
+        }
+
+        public fun get_price<T: store + key>(old_listing: &List<T>): &u64 {
+                &old_listing.price
+        }
+
+        public fun get_last_offer_id<T: store + key>(old_listing: &List<T>): &u64 {
+                &old_listing.last_offer_id
+        }
+
+        /*public entry fun get_offer_by_id<T: store + key, C>(old_listing: &List<T>, offer_id: u64): Offer<C> {
+                let List<T> { id, seller: _, item: _, price: _, last_offer_id: _ } = old_listing;
+                let offer: Offer<C> = dynamic_field::borrow(&mut mp.id, item_id);
+                &offer
+        }*/
+
+        
 }
 
 #[test_only]
