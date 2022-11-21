@@ -15,7 +15,7 @@ module asuoki::auction_lib {
     use sui::transfer;
     use sui::tx_context::{Self,TxContext};
 
-    friend asuoki::shared_auction;
+    friend asuoki::marketplace;
 
     /// Stores information about an auction bid.
     struct BidData has store {

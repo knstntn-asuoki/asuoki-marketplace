@@ -2,9 +2,12 @@ module asuoki::marketplace {
         use sui::object::{Self, ID, UID};
         use sui::transfer;
         use sui::tx_context::{Self, TxContext};
-        use sui::coin::{Coin};
+        use sui::coin::{Self, Coin};
         use sui::dynamic_field;
         use sui::sui::SUI;
+        use asuoki::auction_lib::{Self, Auction};
+
+        const EWrongOwner: u64 = 1;
 
         struct Offer<C: key + store> has store, key {
                 id: UID,
@@ -112,13 +115,29 @@ module asuoki::marketplace {
                 &old_listing.last_offer_id
         }
 
-        /*public entry fun get_offer_by_id<T: store + key, C>(old_listing: &List<T>, offer_id: u64): Offer<C> {
-                let List<T> { id, seller: _, item: _, price: _, last_offer_id: _ } = old_listing;
-                let offer: Offer<C> = dynamic_field::borrow(&mut mp.id, item_id);
-                &offer
-        }*/
+        public entry fun create_auction<T: key + store >(to_sell: T, ctx: &mut TxContext) {
+                let auction = auction_lib::create_auction(object::new(ctx), to_sell, ctx);
+                auction_lib::share_object(auction);
+        }
 
-        
+        public entry fun bid<T: key + store>(
+                coin: Coin<SUI>, auction: &mut Auction<T>, ctx: &mut TxContext
+        ) {
+                auction_lib::update_auction(
+                        auction,
+                        tx_context::sender(ctx),
+                        coin::into_balance(coin),
+                        ctx
+                );
+        }
+
+        public entry fun end_auction<T: key + store>(
+                auction: &mut Auction<T>, ctx: &mut TxContext
+        ) {
+                let owner = auction_lib::auction_owner(auction);
+                assert!(tx_context::sender(ctx) == owner, EWrongOwner);
+                auction_lib::end_shared_auction(auction, ctx);
+        }        
 }
 
 #[test_only]
