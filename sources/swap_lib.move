@@ -63,7 +63,7 @@ module asuoki::swap_lib {
                 let new_list = Swap<T> {
                         id: id,
                         seller: seller,
-                        item: item_req,
+                        item: item_req ,
                         last_offer_id: last_offer_id + 1,
                 };
                 dynamic_field::add(&mut new_list.id, last_offer_id + 1, offer);  

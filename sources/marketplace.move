@@ -6,7 +6,7 @@ module asuoki::marketplace {
         use sui::dynamic_field;
         use sui::sui::SUI;
         use asuoki::auction_lib::{Self, Auction};
-        //use asuoki::swap_lib::{Self, Swap};
+        use asuoki::swap_lib::{Self, Swap_Mechanism};
 
         const EWrongOwner: u64 = 1;
 
@@ -152,7 +152,31 @@ module asuoki::marketplace {
                 let owner = auction_lib::auction_owner(auction);
                 assert!(tx_context::sender(ctx) == owner, EWrongOwner);
                 auction_lib::end_shared_auction(auction, ctx);
-        }        
+        }  
+
+        public entry fun create_swap(ctx: &mut TxContext) {
+                swap_lib::create_swap(ctx);
+        }
+
+        public entry fun swap<T: key + store>(sm: &mut Swap_Mechanism, item: T, ctx: &mut TxContext) {
+                swap_lib::swap<T>(sm, item, ctx);
+        }    
+
+        public entry fun deswap<T: store + key>(sm: &mut Swap_Mechanism, item_id: ID, ctx: &mut TxContext) {
+                swap_lib::deswap<T>(sm, item_id, ctx);
+        }
+
+        public entry fun make_offer_swap<T: store + key>(sm: &mut Swap_Mechanism, item_id: ID, item: T, ctx: &mut TxContext) {
+                swap_lib::make_offer_swap<T>(sm, item_id, item, ctx);
+        }
+
+        public entry fun delete_offer_swap<T: store + key + copy>(sm: &mut Swap_Mechanism, item_id: ID, offer_id: u64, ctx: &mut TxContext) {
+                swap_lib::delete_offer_swap<T>(sm, item_id, offer_id, ctx);
+        }
+
+        public entry fun accept_offer_swap<T: store + key>(sm: &mut Swap_Mechanism, item_id: ID, offer_id: u64, ctx: &mut TxContext) { 
+                swap_lib::accept_offer_swap<T>(sm, item_id, offer_id, ctx);
+        }
 }
 
 #[test_only]
@@ -164,6 +188,7 @@ module asuoki::marketplaceTests {
         use sui::sui::SUI;
         use sui::test_scenario::{Self, Scenario};
         use asuoki::marketplace::{Self, Marketplace};
+        use asuoki::swap_lib::{Swap_Mechanism};
 
         struct NFT has store, key {
                 id: UID,
@@ -190,6 +215,12 @@ module asuoki::marketplaceTests {
                 test_scenario::next_tx(scenario, ADMIN);
                 let nft = NFT { id: object::new(test_scenario::ctx(scenario)), kitty_id: 1 };
                 transfer::transfer(nft, SELLER);
+        }    
+
+        fun mint_kitty_to_buyer(scenario: &mut Scenario) {
+                test_scenario::next_tx(scenario, ADMIN);
+                let nft = NFT { id: object::new(test_scenario::ctx(scenario)), kitty_id: 1 };
+                transfer::transfer(nft, BUYER);
         }     
 
         fun burn_kitty(kitty: NFT): u8 {
@@ -311,6 +342,52 @@ module asuoki::marketplaceTests {
 
                 test_scenario::return_shared(market);
                 test_scenario::return_to_sender(scenario, coin);
+                test_scenario::end(scenario_val);
+        }
+
+        #[test]
+        fun swap_nft_by_nft() {
+                use sui::test_scenario;
+                let scenario_val = test_scenario::begin(ADMIN);
+                let scenario = &mut scenario_val;
+                marketplace::create_swap(test_scenario::ctx(scenario));
+
+                mint_kitty(scenario);
+
+                test_scenario::next_tx(scenario, SELLER);
+                let swap_mech = test_scenario::take_shared<Swap_Mechanism>(scenario);
+                let sm = &mut swap_mech;
+                let nft = test_scenario::take_from_sender<NFT>(scenario);
+                let item_id = object::id(&nft);
+                marketplace::swap<NFT>(sm, nft, test_scenario::ctx(scenario));
+                test_scenario::return_shared(swap_mech);
+
+                mint_kitty_to_buyer(scenario);
+
+                test_scenario::next_tx(scenario, BUYER);
+                let swap_mech = test_scenario::take_shared<Swap_Mechanism>(scenario);
+                let sm = &mut swap_mech;
+                let nft_sell = test_scenario::take_from_sender<NFT>(scenario);
+                marketplace::make_offer_swap<NFT>(sm, item_id, nft_sell, test_scenario::ctx(scenario)); 
+                test_scenario::return_shared(swap_mech);
+
+                test_scenario::next_tx(scenario, SELLER);
+                let swap_mech = test_scenario::take_shared<Swap_Mechanism>(scenario);
+                let sm = &mut swap_mech;
+                marketplace::accept_offer_swap<NFT>(sm, item_id, 1, test_scenario::ctx(scenario));
+                test_scenario::return_shared(swap_mech);
+
+                test_scenario::next_tx(scenario, BUYER);
+                let nft = test_scenario::take_from_sender<NFT>(scenario);
+                let nft_id = burn_kitty(nft);
+                assert!(nft_id == 1, 0);
+
+                test_scenario::next_tx(scenario, SELLER);
+                let nft = test_scenario::take_from_sender<NFT>(scenario);
+                let nft_id = burn_kitty(nft);
+                assert!(nft_id == 1, 0);
+
+
                 test_scenario::end(scenario_val);
         }
 }
