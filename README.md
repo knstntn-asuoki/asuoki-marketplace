@@ -1,9 +1,17 @@
 # Asuoki Marketplace
 ## Deploy
 ```bash
-$ sui client publish --path . --gas-budget 1000 
-$ sui client call --package {package address} --module marketplace --function create --gas-budget 1000
+$ sui client publish --path . --gas-budget 1000
 ```
+
+## Deploy shared marketplace
+```bash
+$ sui client call --package {package address} \
+  --module marketplace \
+  --function create \
+  --gas-budget 1000
+```
+
 ## Listing
 ```bash
 $ sui client call --package {package address} \
