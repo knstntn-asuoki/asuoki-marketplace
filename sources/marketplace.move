@@ -6,13 +6,22 @@ module asuoki::marketplace {
         use sui::dynamic_field;
         use sui::sui::SUI;
         use asuoki::auction_lib::{Self, Auction};
+        //use asuoki::swap_lib::{Self, Swap};
 
         const EWrongOwner: u64 = 1;
 
         struct Offer<C: key + store> has store, key {
                 id: UID,
+                status: u64,
                 offer_id: u64,
                 paid: C,
+                offerer: address,
+        }
+
+        struct DeletedOffer has store, key {
+                id: UID,
+                status: u64,
+                offer_id: u64,
                 offerer: address,
         }
 
@@ -61,6 +70,7 @@ module asuoki::marketplace {
                 let List<T> { id, seller, item, price, last_offer_id } = dynamic_field::remove(&mut mp.id, item_id);
                 let offer = Offer<Coin<SUI>> {
                         id: object::new(ctx), 
+                        status: 0,
                         offer_id: last_offer_id + 1,
                         paid: coin,
                         offerer: tx_context::sender(ctx),
@@ -79,24 +89,33 @@ module asuoki::marketplace {
 
         public entry fun delete_offer<T: store + key>(mp: &mut Marketplace, item_id: ID, offer_id: u64, ctx: &mut TxContext) {
                 let List<T> { id, seller, item, price, last_offer_id } = dynamic_field::remove(&mut mp.id, item_id);
-                let Offer<Coin<SUI>> {id: idOffer, offer_id: _, paid, offerer } = dynamic_field::remove(&mut id, offer_id);
+                let Offer<Coin<SUI>> {id: idOffer, status,  offer_id: _, paid, offerer } = dynamic_field::remove(&mut id, offer_id);
                 assert!(tx_context::sender(ctx) == offerer, 126);
-                object::delete(idOffer);
+                assert!(status == 0, 126);
+                let offer = DeletedOffer {
+                        id: idOffer, 
+                        status: 1,
+                        offer_id: offer_id,
+                        offerer: offerer,
+                };
+                //object::delete(idOffer);
                 transfer::transfer(paid, tx_context::sender(ctx));
                 let new_list = List<T> {
                         id: id,
                         seller: seller,
                         item: item,
                         price: price,
-                        last_offer_id: last_offer_id + 1,
+                        last_offer_id: last_offer_id,
                 };
+                dynamic_field::add(&mut new_list.id, offer_id, offer);  
                 dynamic_field::add(&mut mp.id, item_id, new_list); 
         }
 
         public entry fun accept_offer<T: store + key>(mp: &mut Marketplace, item_id: ID, offer_id: u64, ctx: &mut TxContext) { 
                 let List<T> { id, seller, item, price: _, last_offer_id: _ } = dynamic_field::remove(&mut mp.id, item_id);
                 assert!(tx_context::sender(ctx) == seller, 126);
-                let Offer<Coin<SUI>> {id: idOffer, offer_id: _, paid, offerer } = dynamic_field::remove(&mut id, offer_id);
+                let Offer<Coin<SUI>> {id: idOffer, status, offer_id: _, paid, offerer } = dynamic_field::remove(&mut id, offer_id);
+                assert!(status == 0, 126);
                 transfer::transfer(paid, seller);
                 transfer::transfer(item, offerer);
                 object::delete(idOffer);
@@ -120,9 +139,7 @@ module asuoki::marketplace {
                 auction_lib::share_object(auction);
         }
 
-        public entry fun bid<T: key + store>(
-                coin: Coin<SUI>, auction: &mut Auction<T>, ctx: &mut TxContext
-        ) {
+        public entry fun bid<T: key + store>(coin: Coin<SUI>, auction: &mut Auction<T>, ctx: &mut TxContext) {
                 auction_lib::update_auction(
                         auction,
                         tx_context::sender(ctx),
@@ -131,9 +148,7 @@ module asuoki::marketplace {
                 );
         }
 
-        public entry fun end_auction<T: key + store>(
-                auction: &mut Auction<T>, ctx: &mut TxContext
-        ) {
+        public entry fun end_auction<T: key + store>(auction: &mut Auction<T>, ctx: &mut TxContext) {
                 let owner = auction_lib::auction_owner(auction);
                 assert!(tx_context::sender(ctx) == owner, EWrongOwner);
                 auction_lib::end_shared_auction(auction, ctx);
