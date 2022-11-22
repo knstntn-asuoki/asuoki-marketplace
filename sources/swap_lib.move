@@ -1,3 +1,9 @@
+/*
+        @title: lib for swap nft 1v1
+	@custom: version 1.0
+	@author Konstantin Klyuchnikov (knstntn.asuoki.eth)
+*/
+
 module asuoki::swap_lib {
         use sui::object::{Self, ID, UID};
         use sui::tx_context::{Self, TxContext};

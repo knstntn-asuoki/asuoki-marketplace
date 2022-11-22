@@ -1,3 +1,9 @@
+/*
+        @title: asuoki marketplace
+	@custom: version 1.0
+	@author Konstantin Klyuchnikov (knstntn.asuoki.eth)
+*/
+
 module asuoki::marketplace {
         use sui::object::{Self, ID, UID};
         use sui::transfer;
